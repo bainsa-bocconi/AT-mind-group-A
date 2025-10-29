@@ -1,0 +1,4 @@
+datapizza-ai>=0.0.2
+datapizza-ai-clients-openai-like
+fastapi
+uvicorn
