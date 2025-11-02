@@ -1,0 +1,6 @@
+pandas
+torch
+peft
+bitsandbytes
+transformers
+
