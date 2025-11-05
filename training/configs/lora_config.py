@@ -30,6 +30,7 @@ class LoraConfig(object):
     TEMPERATURE = 0.7
 
     MAX_LENGTH = 1024
-
+    
+    SEED = 0000
 
 Config = LoraConfig

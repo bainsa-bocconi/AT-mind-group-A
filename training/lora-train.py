@@ -1,6 +1,6 @@
 import pandas as pd
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, DataCollatorForLanguageModeling, Trainer, TrainingArguments
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from configs.lora_config import Config
 
@@ -12,7 +12,8 @@ def load_tokenizer():
     tokenizer = AutoTokenizer.from_pretrained(Config.MODEL_NAME)
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
-    return tokenizer
+    collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+    return collator
 """
 we then load our model, we can reduce
 training load by utilizing the bitsandbytes library from hf, to use QLoRA 
@@ -61,3 +62,30 @@ def load_quantized_model():
     model.print_trainable_parameters()
     print("model retrieved correctly, quantized to 4 bit, LoRa prepared")
     return model
+
+def load_trainer():
+    collator = load_tokenizer()
+    model = load_quantized_model()
+
+    trainer = Trainer(
+    model=model,
+    args = TrainingArguments(
+        output_dir=Config.OUTPUT_DIR,
+        num_train_epochs=Config.EPOCHS,
+        per_device_train_batch_size=Config.BATCH_SIZE,
+        per_device_eval_batch_size=Config.BATCH_SIZE,
+        gradient_accumulation_steps=8,
+        learning_rate=Config.LEARNING_RATE,
+        logging_steps=20,
+        eval_steps=200,
+        save_steps=200,
+        save_total_limit=2,
+        bf16=True,
+        seed=Config.SEED,
+        ),
+
+    train_dataset="",
+    eval_dataset="",
+    data_collator=collator,
+)
+    return trainer
