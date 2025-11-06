@@ -13,7 +13,7 @@ def load_tokenizer():
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
     collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
-    return collator
+    return tokenizer, collator
 """
 we then load our model, we can reduce
 training load by utilizing the bitsandbytes library from hf, to use QLoRA 
@@ -64,7 +64,7 @@ def load_quantized_model():
     return model
 
 def load_trainer():
-    collator = load_tokenizer()
+    _, collator = load_tokenizer()
     model = load_quantized_model()
 
     trainer = Trainer(

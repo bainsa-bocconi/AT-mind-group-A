@@ -3,4 +3,5 @@ torch
 peft
 bitsandbytes
 transformers
-
+openpyxl
+datasets
