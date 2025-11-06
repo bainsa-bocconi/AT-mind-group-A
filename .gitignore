@@ -6,17 +6,6 @@ __pycache__/
 # C extensions
 *.so
 
-# Ignore data and local outputs
-/data/*
-!/data/.gitkeep
-/lora-outputs/*
-/outputs/*
-*.png
-*.jpg
-*.jpeg
-*.pdf
-*.jsonl
-
 # Distribution / packaging
 .Python
 build/
