@@ -1,4 +1,3 @@
-import os
 import os.path as op
 import torch
 
@@ -17,7 +16,7 @@ class LoraConfig(object):
     
     #QLoRA configuration
     BIT_4_LOADING = True
-    BIT_4_COMPUTE = torch.bfloat16
+    BIT_4_COMPUTE = torch.float16
     BIT_4_DTYPE = "nf4"
     BIT_4_DOUBLE_QUANT = False
 

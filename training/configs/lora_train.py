@@ -1,40 +1,43 @@
-import pandas as pd
-import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, DataCollatorForLanguageModeling, Trainer, TrainingArguments
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from configs.lora_config import Config
+import torch
 
-"""
-we first load the tokenizer specifying [EOS] padding on the right to avoid
-problems with attention layers
-"""
 def load_tokenizer():
+    """
+    we first load the tokenizer specifying [EOS] padding on the right to avoid
+    problems with attention layers
+    """
+
     tokenizer = AutoTokenizer.from_pretrained(Config.MODEL_NAME)
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
     collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
     return tokenizer, collator
-"""
-we then load our model, we can reduce
-training load by utilizing the bitsandbytes library from hf, to use QLoRA 
-"""
+
 
 def load_quantized_model():
+
+    """
+    we then load our model, we can reduce
+    training load by utilizing the bitsandbytes library from hf, to use QLoRA 
+    
     bitsandbytes_loading = BitsAndBytesConfig(
         load_in_4bit = Config.BIT_4_LOADING,                       # we load the model in 4bit
-        bnb_4bit_compute_dtype = Config.BIT_4_COMPUTE,   # for computations we utilize brain float 16, more stable than float 16
-        bnb_4bit_quant_type =  Config.BIT_4_DTYPE,              # standard 4bit representation
-        bnb_4bit_use_double_quant = Config.BIT_4_DOUBLE_QUANT          # use if training VRAM is an issue
+        bnb_4bit_compute_dtype = Config.BIT_4_COMPUTE,             # for computations we utilize brain float 16, more stable than float 16
+        bnb_4bit_quant_type =  Config.BIT_4_DTYPE,                 # standard 4bit representation
+        bnb_4bit_use_double_quant = Config.BIT_4_DOUBLE_QUANT      # use if training VRAM is an issue
     )
-
-
+    """
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "aut0")
     model = AutoModelForCausalLM.from_pretrained(
         pretrained_model_name_or_path = Config.MODEL_NAME,
         device_map="auto",
         dtype=Config.BIT_4_COMPUTE,
                        
-        quantization_config = bitsandbytes_loading, # QloRA
-    )
+        #quantization_config = bitsandbytes_loading, # QloRA
+    ).to(device)
 
     '''
     targeting query and attention blocks plus some other meaningful blocks,
@@ -63,9 +66,7 @@ def load_quantized_model():
     print("model retrieved correctly, quantized to 4 bit, LoRa prepared")
     return model
 
-def load_trainer():
-    _, collator = load_tokenizer()
-    model = load_quantized_model()
+def load_trainer(model, train_dset, test_dset, collator):
 
     trainer = Trainer(
     model=model,
@@ -80,12 +81,18 @@ def load_trainer():
         eval_steps=200,
         save_steps=200,
         save_total_limit=2,
-        bf16=True,
+        bf16=False,
         seed=Config.SEED,
+
+        # Verbose terminal
+        logging_strategy="steps",
+        log_level="debug",
+        report_to="none",
+        disable_tqdm=False,
         ),
 
-    train_dataset="",
-    eval_dataset="",
+    train_dataset=train_dset,
+    eval_dataset=test_dset,
     data_collator=collator,
 )
     return trainer
