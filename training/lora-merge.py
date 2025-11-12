@@ -24,18 +24,19 @@ def load_jsons(datasets_paths):
 
 def tokenize_row_json(row, tokenizer):
     '''
-    tokenizer for each row in the json, will be mapped to each row of
-    the concatenated and shuffled jsons
+    tokenizer for each row in the json, 
+    before we apply template, then we tokenize
     '''
 
-    return tokenizer(row["text"], truncation = True, max_length = Config.MAX_LENGTH)
+    template_row = tokenizer.apply_chat_template(row["messages"], tokenize=False, add_generation_prompt=False)
+    return tokenizer(template_row, truncation = True, max_length = Config.MAX_LENGTH)
 
 def train_test_hygiene_splitting_and_shuffling(conc_datasets):
     '''
     Eliminates empty strings, or defective jsons, too long/too short.
     Then splits the concatenated dataset in a train and test set
     '''
-    conc_datasets = conc_datasets.filter(lambda x: Config.MAX_LENGTH > len(x.get("text", "").strip().lower()) > 0 )
+    conc_datasets = conc_datasets.filter(lambda x: Config.MAX_LENGTH > len(x.get("messages", "")[1]["content"].strip().lower()) > 0 )
 
     splitted_datasets = conc_datasets.train_test_split(test_size=0.1, seed=Config.SEED)
     return splitted_datasets["train"], splitted_datasets["test"]
@@ -53,11 +54,11 @@ def build_datasets(jsonl_paths):
 
 def main():
     jsonl_paths = [
-        "data/jsonl_augmented/Survey_Vendite_Usato.jsonl",
-        "data/jsonl_augmented/Survey_Vendite_Nuovo.jsonl",
-        "data/jsonl_augmented/Survey_Assistenza.jsonl",
-        "data/jsonl_augmented/Exit_Poll_-_Aprile_settembre_2025_(1).jsonl",
-        "data/jsonl_augmented/Lead_V22_def.jsonl",
+        "data/jsonl/jsonl_llama/Survey_Vendite_Usato_llama.jsonl",
+        "data/jsonl/jsonl_llama/Survey_Vendite_Nuovo_llama.jsonl",
+        "data/jsonl/jsonl_llama/Survey_Assistenza_llama.jsonl",
+        #"data/jsonl/jsonl_llama/Exit_Poll_-_Aprile_settembre_2025_(1)_llama.jsonl",  #use when sft target is found
+        "data/jsonl/jsonl_llama/Lead_V2_def_labeled_llama.jsonl",
     ]
     train_ds, eval_ds, collator = build_datasets(jsonl_paths)
     model = load_quantized_model()
