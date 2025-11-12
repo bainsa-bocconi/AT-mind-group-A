@@ -6,7 +6,7 @@ class LoraConfig(object):
     #Loading model
     PROJECT_ROOT = BASEDIR
     OUTPUT_DIR = op.join(BASEDIR, "..", "lora-outputs")
-    MODEL_NAME = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    MODEL_NAME =  "meta-llama/Llama-3.2-3B"
     
     #LoRA configuration
     LORA_R = 16

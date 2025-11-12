@@ -63,7 +63,7 @@ def load_quantized_model():
     model = prepare_model_for_kbit_training(model)
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
-    print("model retrieved correctly, quantized to 4 bit, LoRa prepared")
+    print("model retrieved correctly\n\n, quantized to 4 bit FALSE\n\n, LoRa prepared\n\n")
     return model
 
 def load_trainer(model, train_dset, test_dset, collator):
