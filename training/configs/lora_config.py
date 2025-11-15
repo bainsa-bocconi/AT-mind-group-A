@@ -18,18 +18,40 @@ class LoraConfig(object):
     BIT_4_LOADING = True
     BIT_4_COMPUTE = torch.float16
     BIT_4_DTYPE = "nf4"
-    BIT_4_DOUBLE_QUANT = False
+    BIT_4_DOUBLE_QUANT = True
 
     #fine-tuning configuration
     EPOCHS = 1
-    BATCH_SIZE = 2
+    BATCH_SIZE = 1
     LEARNING_RATE = 2e-5
     MAX_OUTPUT_TOKEN = 500
     TOP_P = 0.9
     TEMPERATURE = 0.7
 
-    MAX_LENGTH = 1024
+    MAX_LENGTH = 512
     
     SEED = 0000
+    
+    SAVE_TRAINED_MODEL_DICT = "autotorino-lora-adapters"
+
+
+    # https://jinja.palletsprojects.com/en/stable/templates/
+    # syntax used for building llama chat templates
+    LLAMA2_CHAT_TEMPLATE = """{% if messages[0]['role'] == 'system' %}
+{{ bos_token }}[INST] <<SYS>>
+{{ messages[0]['content'] }}
+<</SYS>>
+
+{% set loop_messages = messages[1:] %}{% else %}{{ bos_token }}[INST]{% set loop_messages = messages %}{% endif %}
+{% for message in loop_messages %}
+{% if message['role'] == 'user' %}
+{{ message['content'] }} [/INST]
+{% elif message['role'] == 'assistant' %}
+{{ message['content'] }}{{ eos_token }}
+{% elif message['role'] == 'tool' %}
+Tool: {{ message['content'] }}{{ eos_token }}
+{% endif %}
+{% if (loop_messages[loop.index0]['role'] == 'assistant') and not loop.last %}[INST]{% endif %}
+{% endfor %}"""
 
 Config = LoraConfig
