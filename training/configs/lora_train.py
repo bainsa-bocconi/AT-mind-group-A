@@ -18,27 +18,30 @@ def load_tokenizer():
 
 def load_quantized_model():
 
-    """
+    '''
     we then load our model, we can reduce
     training load by utilizing the bitsandbytes library from hf, to use QLoRA 
-    
+    '''
     bitsandbytes_loading = BitsAndBytesConfig(
         load_in_4bit = Config.BIT_4_LOADING,                       # we load the model in 4bit
         bnb_4bit_compute_dtype = Config.BIT_4_COMPUTE,             # for computations we utilize brain float 16, more stable than float 16
         bnb_4bit_quant_type =  Config.BIT_4_DTYPE,                 # standard 4bit representation
         bnb_4bit_use_double_quant = Config.BIT_4_DOUBLE_QUANT      # use if training VRAM is an issue
     )
-    """
+    
     
     device = torch.device("cuda" if torch.cuda.is_available() else "aut0")
     model = AutoModelForCausalLM.from_pretrained(
         pretrained_model_name_or_path = Config.MODEL_NAME,
-        device_map="auto",
+        device_map="sequential",
         dtype=Config.BIT_4_COMPUTE,
                        
-        #quantization_config = bitsandbytes_loading, # QloRA
-    ).to(device)
-
+        quantization_config = bitsandbytes_loading, # QloRA
+        max_memory={0: "5.5GiB", "cpu": "48GiB"},
+        attn_implementation="sdpa",
+    )
+    model.config.use_cache = False
+    model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
     '''
     targeting query and attention blocks plus some other meaningful blocks,
     if training is too slow, drop to only query and output layers
@@ -53,7 +56,7 @@ def load_quantized_model():
     lora_alpha=Config.LORA_ALPHA,
     lora_dropout=Config.LORA_DROPOUT,
     bias="none",
-    task_type="CAUSAL_LM"
+    task_type="CAUSAL_LM",
     )
 
     """
@@ -75,12 +78,15 @@ def load_trainer(model, train_dset, test_dset, collator):
         num_train_epochs=Config.EPOCHS,
         per_device_train_batch_size=Config.BATCH_SIZE,
         per_device_eval_batch_size=Config.BATCH_SIZE,
-        gradient_accumulation_steps=8,
+        gradient_accumulation_steps=16,
         learning_rate=Config.LEARNING_RATE,
         logging_steps=20,
+        save_strategy="steps",
+        optim="paged_adamw_8bit",
+        save_total_limit=4,
+        save_safetensors=True,
         eval_steps=200,
-        save_steps=200,
-        save_total_limit=2,
+        save_steps=100,
         bf16=False,
         seed=Config.SEED,
 
