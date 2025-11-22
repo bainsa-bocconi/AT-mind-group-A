@@ -1,9 +1,4 @@
-'''
-TODO: train ok
-      merge lora weights to model  
-      upload to hf
-'''
-from configs.lora_config import Config
+from lora_config import Config
 from configs.lora_train import load_tokenizer, load_quantized_model, load_trainer
 from datasets import load_dataset, concatenate_datasets
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, DataCollatorForLanguageModeling, Trainer, TrainingArguments
@@ -13,74 +8,105 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 2) train model with PEFT after loading with 4-bit quantization
 3) save results locally --> upload on hf
 '''
-
-def load_jsons(datasets_paths):
+def load_jsons(paths):
     '''
     Loads json datasets as Dataset hf objects {"train": Dataset(...)}, 
     indexes them at "Train" and concatenates them, 
     '''
 
-    jsons = [load_dataset("json", data_files=path, split = "train") for path in datasets_paths]
-    dset = concatenate_datasets(dsets=jsons)
-    return dset
+    sets = [load_dataset("json", data_files=p, split="train") for p in paths]
+    return concatenate_datasets(sets)
 
 def tokenize_row_json(row, tokenizer):
     '''
-    tokenizer for each row in the json, 
-    before we apply template, then we tokenize
+    DEPRECATED WITH SFFTT
     '''
 
     template_row = tokenizer.apply_chat_template(row["messages"], tokenize=False, add_generation_prompt=False)
     toks = tokenizer(template_row, truncation = True, max_length = Config.MAX_LENGTH, padding=False)
     return toks
 
-def train_test_hygiene_splitting_and_shuffling(conc_datasets):
+def tokenize_batch_json(batch, tokenizer):
     '''
-    Eliminates empty strings, or defective jsons
-    Then splits the concatenated dataset in a train and test set
+    DEPRECATED WITH SFFTT
     '''
-    for row in conc_datasets:
-        if "messages" not in row or not isinstance(row["messages"], list):
-            raise TypeError("Invalid json formatting1")
-        for role in row["messages"]:
-            if not isinstance(role, dict): raise TypeError("Invalid json formatting2")
-            if "role" not in role.keys() or "content" not in role.keys(): raise TypeError("Invalid Json formatting3")
+    # text is already fully formatted just tokenizes it, for different collator than standard
+    texts = batch["text"]
+    return tokenizer(
+        texts,
+        truncation=True,
+        max_length=Config.MAX_LENGTH,
+        padding=False
+    )
 
-    
-    conc_datasets = conc_datasets.shuffle(seed = Config.SEED)
-    splitted_datasets = conc_datasets.train_test_split(test_size=0.1, seed=Config.SEED)
-    return splitted_datasets["train"], splitted_datasets["test"]
+def split_shuffle(ds):
+
+    ds = ds.filter(lambda ex: isinstance(ex.get("messages", []), list) and len(ex["messages"]) > 0)
+    ds = ds.shuffle(seed=Config.SEED)
+    parts = ds.train_test_split(test_size=0.1, seed=Config.SEED)
+    return parts["train"], parts["test"]
 
 def build_datasets(jsonl_paths):
+    '''
+    DEPRECATED WITH SFFTT
+    '''
     tokenizer, collator = load_tokenizer()
-    tokenizer.chat_template = Config.LLAMA2_CHAT_TEMPLATE
+    tokenizer.chat_template = Config.LLAMA3_CHAT_TEMPLATE
     tokenizer.save_pretrained(Config.SAVE_TRAINED_MODEL_DICT)
 
 
     raw = load_jsons(jsonl_paths)
-    train_raw, eval_raw = train_test_hygiene_splitting_and_shuffling(raw)
+    train_raw, eval_raw = split_shuffle(raw)
 
-    train_tok = train_raw.map(lambda row: tokenize_row_json(row, tokenizer),
-                              batched=False, remove_columns=train_raw.column_names)
-    eval_tok  = eval_raw.map(lambda row: tokenize_row_json(row, tokenizer),
-                             batched=False, remove_columns=eval_raw.column_names)
+    train_tok = train_raw.map(lambda batch: tokenize_batch_json(batch, tokenizer),
+                              batched=True, remove_columns=train_raw.column_names)
+    eval_tok  = eval_raw.map(lambda batch: tokenize_batch_json(batch, tokenizer),
+                             batched=True, remove_columns=eval_raw.column_names)
    
     return train_tok, eval_tok, collator
 
-def main():
-    jsonl_paths = [
-        "data/jsonl/jsonl_llama/Survey_Vendite_Usato_llama.jsonl",
-        "data/jsonl/jsonl_llama/Survey_Vendite_Nuovo_llama.jsonl",
-        "data/jsonl/jsonl_llama/Survey_Assistenza_llama.jsonl",
-        #"data/jsonl/jsonl_llama/Exit_Poll_-_Aprile_settembre_2025_(1)_llama.jsonl",  #use when sft target is found
-        "data/jsonl/jsonl_llama/Lead_V2_def_labeled_llama.jsonl",
-    ]
-    train_ds, eval_ds, collator = build_datasets(jsonl_paths)
-    model = load_quantized_model()
 
-    trainer = load_trainer(model, train_dset=train_ds, test_dset=eval_ds, collator=collator)
+def validate_messages(ex):
+    '''
+    For safety
+    '''
+    msgs = ex["messages"]
+    assert isinstance(msgs, list) and msgs, "messages must be a non-empty list"
+    roles = [m["role"] for m in msgs]
+    assert roles[-1] == "assistant", "last message must be assistant"
+    assert all(r in {"system","user","assistant","tool"} for r in roles), "unknown role"
+    assert all(isinstance(m["content"], str) for m in msgs), "content must be str"
+
+def has_nonempty_answer(ex):
+    '''
+    for safety
+    '''
+    last = ex["messages"][-1]
+    return bool(last["content"].strip())
+
+def main():
+    tok, collator = load_tokenizer()
+    raw = load_jsons([
+        "data/jsonl/jsonl_llama/Lead_V2_def_labeled_llama.jsonl",
+        "data/jsonl/jsonl_llama/Survey_Assistenza_llama.jsonl",
+        "data/jsonl/jsonl_llama/Survey_Vendite_Nuovo_llama.jsonl",
+        "data/jsonl/jsonl_llama/Survey_Vendite_Usato_llama.jsonl",
+    ])
+    train_raw, eval_raw = split_shuffle(raw)
+
+
+    for row in train_raw:
+        validate_messages(row)
+        has_nonempty_answer(row)
+    for row in eval_raw:
+        validate_messages(row)
+        has_nonempty_answer(row)
+
+    model = load_quantized_model()
+    trainer = load_trainer(model, tok, train_raw, eval_raw, collator)
     trainer.train()
     model.save_pretrained(Config.SAVE_TRAINED_MODEL_DICT)
+    tok.save_pretrained(Config.SAVE_TRAINED_MODEL_DICT)
 
 if __name__ == "__main__":
     main()
