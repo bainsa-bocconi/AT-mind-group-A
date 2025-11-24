@@ -6,13 +6,13 @@ class LoraConfig(object):
     #Loading model
     PROJECT_ROOT = BASEDIR
     OUTPUT_DIR = op.join(BASEDIR, "..", "lora-outputs")
-    MODEL_NAME =  "meta-llama/Llama-3.2-3B"
+    MODEL_NAME =  "meta-llama/Llama-3.1-8B-instruct"
     
     #LoRA configuration
-    LORA_R = 32
-    LORA_ALPHA = 32
+    LORA_R = 4
+    LORA_ALPHA = 8
     LORA_DROPOUT = 0.05
-    TARGET_MODULES = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj","up_proj","down_proj" ]
+    TARGET_MODULES = ["q_proj","k_proj","v_proj","o_proj"]
     
     #QLoRA configuration
     BIT_4_LOADING = True
@@ -21,18 +21,18 @@ class LoraConfig(object):
     BIT_4_DOUBLE_QUANT = True
 
     #fine-tuning configuration
-    EPOCHS = 3
+    EPOCHS = 1
     BATCH_SIZE = 1
-    LEARNING_RATE = 2e-4
+    LEARNING_RATE = 5e-6
     MAX_OUTPUT_TOKEN = 500
     TOP_P = 0.9
-    TEMPERATURE = 0.7
+    TEMPERATURE = 0.5
 
-    MAX_LENGTH = 512
+    MAX_LENGTH = 2048
     
     SEED = 0000
     
-    SAVE_TRAINED_MODEL_DICT = "autotorino-lora-adapters-plus-tokenizer-3epoch"
+    SAVE_TRAINED_MODEL_DICT = "autotorino-lora-adapters-plus-tokenizer-8B-instruct"
 
 
     # https://jinja.palletsprojects.com/en/stable/templates/
