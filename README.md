@@ -8,38 +8,20 @@ This is a FastAPI application that integrates with DataPizza AI to provide an AP
 
 ## Installation
 
-1. Install dependencies:
+python -m uvicorn app:app --host 0.0.0.0 --port 8000
 
-   ```bash
-   make install
-   # or: uv sync
-   ```
+$json = @'
+{
+  "model": "autotorino",
+  "messages": [
+    {"role":"system","content":"Sei un copilot per Autotorino."},
+    {"role":"user","content":"Cliente insoddisfatto del preventivo: come rispondo?"}
+  ],
+  "max_tokens": 64
+}
+'@
 
-2. Setup Ollama (install, pull model, start):
-
-   ```bash
-   make setup-ollama
-   # Follow the echoed instructions
-   ```
-
-## Running the App
-
-1. Start Ollama (if not already running):
-
-   ```bash
-   ollama serve
-   ```
-
-2. Run the FastAPI app:
-
-   ```bash
-   make run
-   # or: uvicorn main:app --reload
-   ```
-
-3. Test the endpoint:
-
-   ```bash
-   make test
-   # or: curl -X POST "http://localhost:8000/chat" -H "Content-Type: application/json" -d '{"prompt": "Hello, world!"}'
-   ```
+Invoke-RestMethod http://localhost:8000/v1/chat/completions `
+  -Method POST `
+  -ContentType "application/json" `
+  -Body $json | ConvertTo-Json -Depth 6
