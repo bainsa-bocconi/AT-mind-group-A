@@ -1,58 +1,28 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, DataCollatorForLanguageModeling, trainer, TrainingArguments
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-from training.lora_config import Config
+from lora_config import Config
 import torch
 from trl.trainer.utils import DataCollatorForCompletionOnlyLM
 from trl import SFTTrainer, SFTConfig
 
-
-def load_tokenizer():
-    """
-    we first load the tokenizer specifying [EOS] padding on the right to avoid
-    problems with attention layers
-    """
-
-    tok = AutoTokenizer.from_pretrained(Config.MODEL_NAME)
+def load_tokenizer_instruct():
+    tok = AutoTokenizer.from_pretrained(Config.MODEL_NAME, use_fast=True)
     tok.pad_token = tok.eos_token
-    tok.padding_side = "right"
-    tok.truncation_side = "left"
-    tok.chat_template = Config.LLAMA3_CHAT_TEMPLATE  # we set template for future uses
-    assert "<|start_header_id|>" in tok.chat_template
-    assert "<|eot_id|>" in tok.chat_template
-    collator = build_collator(tok)
+
+    assistant_stub = tok.apply_chat_template(
+    [{"role":"assistant","content":""}],
+    tokenize=False,
+    add_generation_prompt=True,
+)
+
+    key = "<|start_header_id|>assistant<|end_header_id|>"
+    start = assistant_stub.rfind(key)
+    assistant_hdr = assistant_stub[start:].replace("\r\n", "\n")
+
+    collator = DataCollatorForCompletionOnlyLM(response_template=assistant_hdr, tokenizer=tok)
     return tok, collator
 
-def build_collator(tok):
-    # derive the exact assistant prefix robustly
-    sentinel = "<<<ASSISTANT_START>>>"
-    probe = tok.apply_chat_template(
-        [
-            {"role": "system", "content": "s"},
-            {"role": "user", "content": "u"},
-            {"role": "assistant", "content": sentinel},
-        ],
-        tokenize=False, add_generation_prompt=False
-    )
-    i = probe.rfind("<|start_header_id|>assistant<|end_header_id|>")
-    assert i != -1, "assistant header not found in probe"
-    j = probe.index(sentinel, i)
-    response_prefix = probe[i:j]  
-
-    response_prefix_ids = tok.encode(response_prefix, add_special_tokens=False)
-    assert response_prefix_ids, "empty response_prefix_ids"
-
-    # Safety guardrail for older versions of collator
-    try:
-        return DataCollatorForCompletionOnlyLM(
-            tokenizer=tok, response_template_ids=response_prefix_ids
-        )
-    except TypeError:
-        return DataCollatorForCompletionOnlyLM(
-            tokenizer=tok, response_template=response_prefix
-        )
-
-
-def load_quantized_model():
+def load_quantized_model_instruct():
 
     '''
     we then load our model, we can reduce
@@ -69,12 +39,13 @@ def load_quantized_model():
     device = torch.device("cuda" if torch.cuda.is_available() else "auto")
     model = AutoModelForCausalLM.from_pretrained(
         pretrained_model_name_or_path = Config.MODEL_NAME,
-        device_map="auto",
-        torch_dtype=Config.BIT_4_COMPUTE,
-                       
+        device_map={"": 0}, 
+        torch_dtype=Config.BIT_4_COMPUTE,                      
         quantization_config = bitsandbytes_loading, # QloRA
-        max_memory={"":0},
+        low_cpu_mem_usage=True, 
         attn_implementation="sdpa",
+        trust_remote_code=False,
+        local_files_only=True
     )
     model.config.use_cache = False
     model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
@@ -105,7 +76,7 @@ def load_quantized_model():
     print("model retrieved correctly\n\n, quantized to 4 bit FALSE\n\n, LoRa prepared\n\n")
     return model
 
-def load_trainer(model, tok, train_ds, eval_ds, collator):
+def load_trainer_instruct(model, tok, train_ds, eval_ds, collator):
     sft_cfg = SFTConfig(
         dataset_text_field=None,       
         max_seq_length=Config.MAX_LENGTH,
@@ -118,9 +89,9 @@ def load_trainer(model, tok, train_ds, eval_ds, collator):
         learning_rate=Config.LEARNING_RATE,
         logging_steps=20,
         save_strategy="steps",
-        save_steps=100,
+        save_steps=50,
         eval_steps=200,
-        save_total_limit=4,
+        save_total_limit=3,
         save_safetensors=True,
         optim="paged_adamw_8bit",
         bf16=False,
@@ -129,13 +100,21 @@ def load_trainer(model, tok, train_ds, eval_ds, collator):
         log_level="debug",
         report_to="none",
         disable_tqdm=False,
+        dataloader_num_workers=2,                  
+        dataloader_pin_memory=True,
+        dataloader_persistent_workers=True,
     )
 
-    def format_example(example):
-    
-        return tok.apply_chat_template(
-            example["messages"], tokenize=False, add_generation_prompt=False     #we apply the chat template for the model
+    def to_text(ex):
+        text =tok.apply_chat_template(
+            ex["messages"], tokenize=False, add_generation_prompt=False
         )
+        text = text.replace("\r\n", "\n")
+        return {"text": text}
+
+    train_ds = train_ds.map(to_text, batched=False, num_proc=1)
+    if eval_ds is not None:
+        eval_ds = eval_ds.map(to_text, batched=False, num_proc=1)
 
     trainer = SFTTrainer(
         model=model,
@@ -143,10 +122,8 @@ def load_trainer(model, tok, train_ds, eval_ds, collator):
         train_dataset=train_ds,
         eval_dataset=eval_ds,
         data_collator=collator,
-        formatting_func=lambda ex: format_example(ex),
+        formatting_func=None,
+        dataset_text_field="text",
         args=sft_cfg,
     )
     return trainer
-
-
-

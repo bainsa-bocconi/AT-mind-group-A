@@ -5,8 +5,8 @@ import os
 
 # Before merging remove unwanted parameters from adapter-config.json
 
-LORA_ADAPTERS= "lora-outputs/checkpoint-3129"
-MODEL_NAME =  "meta-llama/Llama-3.2-3B"
+LORA_ADAPTERS= "lora-outputs/checkpoint-500"
+MODEL_NAME =  "meta-llama/Llama-3.1-8B-instruct"
 
 base = AutoModelForCausalLM.from_pretrained(
     MODEL_NAME, torch_dtype="float32", 
@@ -24,4 +24,4 @@ model = model.merge_and_unload()
 save_dir = "autotorino-merged-model"
 os.makedirs(save_dir, exist_ok=True)
 
-model.save_pretrained(save_dir, safe_serialization=True)
+model.save_pretrained(save_dir, safe_serialization=True, max_shard_size="2GB")
