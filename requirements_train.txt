@@ -1,7 +1,11 @@
 pandas
 torch
-peft
-bitsandbytes
-transformers
+peft==0.11.1
+bitsandbytes==0.43.2
+transformers==4.41.2
+accelerate==0.30.1
 openpyxl
-datasets
+datasets==2.19.1
+trl==0.9.6
+
+# pip install "torch==2.3.1" --index-url https://download.pytorch.org/whl/cu121  # for pytorch compatible with gpu
