@@ -4,8 +4,13 @@ httpx==0.27.2
 python-dotenv==1.0.1
 huggingface_hub[hf_transfer]
 vllm
-accelerate
 pydantic
-transformers==4.44
+pandas
 torch
-bitsandbytes
+peft==0.11.1
+bitsandbytes==0.43.2
+transformers==4.41.2
+accelerate==0.30.1
+openpyxl
+datasets==2.19.1
+trl==0.9.6
