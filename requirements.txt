@@ -9,8 +9,10 @@ pandas
 torch
 peft==0.11.1
 bitsandbytes==0.43.2
-transformers==4.41.2
+transformers==4.45.0
+tokenizers==0.22.1   
 accelerate==0.30.1
 openpyxl
 datasets==2.19.1
 trl==0.9.6
+gradio

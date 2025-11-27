@@ -2,14 +2,14 @@ import os
 import sys
 import torch
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from typing import List, Literal, Optional
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 
-MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", "autotorino")         
-BASE_MODEL = "Canonik/Autotorino-Llama-3.1-8B-instruct"       
-
+MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", "autotorino")  
+BASE_MODEL = "Canonik/Autotorino-Llama-3.1-8B-instruct_v2"
 
 app = FastAPI(title="Autotorino GPU API")
 
@@ -20,10 +20,10 @@ bitsandbytes_loading = BitsAndBytesConfig(
         load_in_4bit = True,                       # we load the model in 4bit
         bnb_4bit_compute_dtype =torch.float16,             # for computations we utilize brain float 16, more stable than float 16
         bnb_4bit_quant_type = "nf4",                 # standard 4bit representation
-        bnb_4bit_use_double_quant = True      # use if training VRAM is an issue
+        bnb_4bit_use_double_quant = True   # use if training VRAM is an issue
     )
 
-tok = AutoTokenizer.from_pretrained(MODEL_DIR)    # meta-llama/Llama-3.1-8B-instruct  Canonik/Autotorino-Llama-3.1-8B-instruct
+tok = AutoTokenizer.from_pretrained(MODEL_DIR)     # meta-llama/Llama-3.1-8B-instruct  Canonik/Autotorino-Llama-3.1-8B-instruct
 
 model = AutoModelForCausalLM.from_pretrained(
         MODEL_DIR,
@@ -33,14 +33,18 @@ model = AutoModelForCausalLM.from_pretrained(
         low_cpu_mem_usage=True, 
         attn_implementation="sdpa",
         trust_remote_code=False,
-        local_files_only=True)
+        local_files_only=False
+        )
         
 model.eval()
 model.config.use_cache = True
 
-# eos id for <|eot_id|>
 EOT = tok.convert_tokens_to_ids("<|eot_id|>")
-
+if EOT is None:
+    EOT = tok.eos_token_id
+if tok.pad_token_id is None:
+    tok.pad_token = tok.eos_token
+pad_id = tok.pad_token_id
 
 class Message(BaseModel):
     role: Literal["system", "user", "assistant", "tool"]
@@ -51,7 +55,7 @@ class ChatRequest(BaseModel):
     messages: List[Message]
     max_tokens: int = 256
     temperature: float = 0.2
-    top_p: float = 0.9
+    top_p: float = 0.5
 
 
 @app.get("/health")
@@ -76,7 +80,12 @@ def chat(req: ChatRequest):
             eos_token_id=[tok.eos_token_id, EOT],
             pad_token_id=tok.pad_token_id,
         )
-        text = tok.decode(out[0], skip_special_tokens=True)
-        return {"choices":[{"index":0,"message":{"role":"assistant","content":text}}], "model": req.model}
+
+        generated_tokens = out[0][inputs.input_ids.shape[1]:]
+        text = tok.decode(generated_tokens, skip_special_tokens=True)
+
+        # MODIFICA QUI: Ritorna testo semplice invece del JSON complesso
+        return PlainTextResponse(text)
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -2,13 +2,13 @@ import os
 import sys
 from huggingface_hub import snapshot_download
 
-BASE_MODEL = "Canonik/Autotorino-Llama-3.1-8B-instruct" 
+BASE_MODEL = "Canonik/Autotorino-Llama-3.1-8B-instruct_v2" 
 MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models", "autotorino")
 
 def download():
-    print(f"Downloading {BASE_MODEL} in {MODEL_DIR}.\n\n\n")
+    print(f"\n\n\nDownloading {BASE_MODEL} in {MODEL_DIR}.\n\n\n")
     print("__________________________________________________________________________________")
-    print(f"This operation may take several minutes, keep computer on and plugged in.\n\n\n")
+    print(f"\n\n\nThis operation may take several minutes, keep computer on and plugged in.\n\n\n")
     print("__________________________________________________________________________________")
 
     try:
