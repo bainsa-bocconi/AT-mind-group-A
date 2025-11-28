@@ -84,8 +84,13 @@ def chat(req: ChatRequest):
         generated_tokens = out[0][inputs.input_ids.shape[1]:]
         text = tok.decode(generated_tokens, skip_special_tokens=True)
 
-        # MODIFICA QUI: Ritorna testo semplice invece del JSON complesso
+        
         return PlainTextResponse(text)
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+if __name__ == "__main__":
+    import uvicorn
+    print("Server avviato su http://0.0.0.0:8000")
+    uvicorn.run(app, host="0.0.0.0", port=8000)
