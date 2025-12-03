@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from typing import List, Literal, Optional
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, TextStreamer
 
-# --- PATH CONFIGURATION ---
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "models", "autotorino")
 
@@ -121,7 +121,7 @@ HTML_UI = """
 
 class IncrementalStreamer(TextStreamer):
     def __init__(self, tokenizer, **decode_kwargs):
-        # Initialize with skip_prompt=True
+
         super().__init__(tokenizer, skip_prompt=True, **decode_kwargs)
         self.text_queue = queue.Queue()
         self.stop_signal = None
@@ -132,14 +132,14 @@ class IncrementalStreamer(TextStreamer):
         if stream_end: self.text_queue.put(self.stop_signal)
 
     def put(self, value):
-        # 1. CRITICAL FIX: Skip the input prompt tokens!
+        
         if self.skip_prompt and self.next_tokens_are_prompt:
             self.next_tokens_are_prompt = False
             return
 
         if len(value.shape) > 1: value = value[0]
         
-        # 2. Incremental Decoding
+        
         new_bytes = self.tokenizer.decode(value, skip_special_tokens=True).encode("utf-8")
         new_text = self.decoder.decode(new_bytes, final=False)
         
